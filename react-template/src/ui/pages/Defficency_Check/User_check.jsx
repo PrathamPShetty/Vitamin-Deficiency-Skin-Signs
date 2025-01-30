@@ -14,25 +14,30 @@ function UserHomePage() {
 
   const handleImageChange = (event) => {
     setImage(event.target.files[0]);
+       
+    console.log("image event set");
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!image) return;
-
+    console.log("image present");
     setLoading(true);
-
+ 
     const formData = new FormData();
     formData.append("file", image);
 
     try {
-      const response = await axios.post("https://0.0.0.0:8000/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      const response = await axios.post('http://localhost:8000/upload/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
+      
+      console.log(response.data)
+      setImageUrl("http://localhost:8000/static/uploaded_image.png");
       setResult(response.data.predicted_class);
-      setVitamins(response.data.vitamins);
-      setImageUrl(URL.createObjectURL(image)); // Show uploaded image
+      // setVitamins(response.data.vitamins);
+      // setImageUrl(URL.createObjectURL(image)); // Show uploaded image
     } catch (error) {
       console.error(error);
     }
@@ -60,7 +65,7 @@ function UserHomePage() {
           <div className="bg-white p-8 rounded-lg shadow-lg">
             <h2 className="text-xl font-bold mb-4 text-gray-800">Uploaded Image</h2>
             <div className="mb-6">
-              {loading && imageUrl==null ? (
+              {loading && !imageUrl ? (
                <Skeleton variant="rectangular" width={210} height={60} />
               ) : (
                 <img
