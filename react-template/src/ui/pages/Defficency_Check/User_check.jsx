@@ -1,17 +1,45 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from "react-router-dom";
 import axios from 'axios';
+import Skeleton from 'react-loading-skeleton';
 
-
-const postCustomersData = () => {
-  axios
-      .get("https://localhost:8000/")
-      .then(data => console.log(data.data))
-      .catch(error => console.log(error));
-};
 
 
 function UserHomePage() {
+  const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState("");
+  const [vitamins, setVitamins] = useState([]);
+  const [imageUrl, setImageUrl] = useState("");
+
+  const handleImageChange = (event) => {
+    setImage(event.target.files[0]);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!image) return;
+
+    setLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", image);
+
+    try {
+      const response = await axios.post("https://0.0.0.0:8000/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setResult(response.data.predicted_class);
+      setVitamins(response.data.vitamins);
+      setImageUrl(URL.createObjectURL(image)); // Show uploaded image
+    } catch (error) {
+      console.error(error);
+    }
+
+    setLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Navbar */}
@@ -19,11 +47,8 @@ function UserHomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center py-4">
           <h1 className="text-2xl font-bold text-purple-700">Vitamin Deficiency</h1>
           <div className="space-x-6">
-            {/* <a href="#model-performance" className="text-gray-600 hover:text-purple-700 font-medium">Model Performance</a> */}
             <a href="#image-classification" className="text-gray-600 hover:text-purple-700 font-medium">Image Classification</a>
-            <Link to="/" className="text-gray-600 hover:text-purple-700 font-medium">
-              Logout
-            </Link>
+            <Link to="/" className="text-gray-600 hover:text-purple-700 font-medium">Logout</Link>
           </div>
         </div>
       </nav>
@@ -35,15 +60,19 @@ function UserHomePage() {
           <div className="bg-white p-8 rounded-lg shadow-lg">
             <h2 className="text-xl font-bold mb-4 text-gray-800">Uploaded Image</h2>
             <div className="mb-6">
-              <img
-                src="https://via.placeholder.com/200"
-                alt="Uploaded"
-                className="w-full h-auto rounded-lg shadow-md"
-              />
+              {loading && imageUrl==null ? (
+               <Skeleton variant="rectangular" width={210} height={60} />
+              ) : (
+                <img
+                  src={imageUrl}
+                  alt="Uploaded"
+                  className="w-full h-auto rounded-lg shadow-md"
+                />
+              )}
             </div>
             <div className="mb-4">
-              <p><strong>Results:</strong> Pitting</p>
-              <p><strong>Vitamin Suggestion:</strong> Vitamin - A, C, D</p>
+              <p><strong>Results:</strong> {loading ? <Skeleton width={200} /> : result || "N/A"}</p>
+              <p><strong>Vitamin Suggestion:</strong> {loading ? <Skeleton width={200} /> : vitamins.join(", ") || "N/A"}</p>
             </div>
             <div>
               <p className="font-semibold text-gray-800 mb-2">Foods that may help support overall skin and nail health include:</p>
@@ -58,10 +87,11 @@ function UserHomePage() {
           {/* Image Classification Form */}
           <div className="bg-white p-8 rounded-lg shadow-lg">
             <h2 className="text-xl font-bold mb-6 text-gray-800">Image Classification</h2>
-            <form className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <input
                   type="file"
+                  onChange={handleImageChange}
                   className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>

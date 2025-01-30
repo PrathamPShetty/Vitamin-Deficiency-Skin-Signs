@@ -1,5 +1,4 @@
 import os
-import uuid
 import numpy as np
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from tensorflow.keras.models import load_model
@@ -10,78 +9,88 @@ from io import BytesIO
 # Initialize FastAPI app
 app = FastAPI()
 
-# Skin type and acne type class names
-class_names1 = ['Dry_skin', 'Normal_skin', 'Oil_skin']
+# Define class names for skin type classification
+# class_names = [
+#     'Light Diseases and Disorders of Pigmentation',
+#     'Acne and Rosacea Photos',
+#     'Poison Ivy Photos and other Contact Dermatitis',     
+#     'Atopic Dermatitis Photos',
+#     'Hair Loss Photos Alopecia and other Hair Diseases'
+# ]
+class_names = [
+    'Light Diseases and Disorders of Pigmentation',
+    'Acne and Rosacea Photos',
+    'Poison Ivy Photos and other Contact Dermatitis',     ]
 
-
-# Load the Keras models
+# Load the Keras model
 def get_models():
-    global model1, model2
+    global model  # Ensure global scope
     try:
-        model1 = load_model('./models/best_model.pth')
+        model = load_model('./models/skin_type_classifier.h5')
         print("Skin type model loaded successfully.")
-  
     except Exception as e:
-        print(f"Failed to load models: {e}")
-        raise HTTPException(status_code=500, detail="Error loading models.")
+        print(f"Failed to load model: {e}")
+        raise HTTPException(status_code=500, detail="Error loading model.")
 
+# Call function to load models at startup
 get_models()
 
-# Preprocess the image for prediction
+# Preprocess the uploaded image
 def preprocess_image(img_path):
     try:
-        img = image.load_img(img_path, target_size=(224, 224))
-        img_tensor = image.img_to_array(img)
-        img_tensor = np.expand_dims(img_tensor, axis=0)
-        img_tensor /= 255.0
-        print(f"Image loaded and preprocessed from path: {img_path}")
+        img = image.load_img(img_path, target_size=(224, 224))  # Resize image
+        img_tensor = image.img_to_array(img)  # Convert to numpy array
+        img_tensor = np.expand_dims(img_tensor, axis=0)  # Add batch dimension
+        img_tensor /= 255.0  # Normalize pixel values
         return img_tensor
     except Exception as e:
-        print(f"Error in loading and preprocessing image: {e}")
+        print(f"Error in preprocessing image: {e}")
         raise HTTPException(status_code=400, detail="Error processing image.")
 
-def predict_skin(img_path):
+# Predict skin type from the image
+def predict_skin_type(img_path):
     try:
-        new_image = preprocess_image(img_path)
-        predictions = model1.predict(new_image)
-        pred_class = class_names1[np.argmax(predictions[0])]
-        print(f"Skin type prediction: {pred_class}")
-        return pred_class
+        processed_image = preprocess_image(img_path)
+        predictions = model.predict(processed_image)
+        predicted_class = class_names[np.argmax(predictions[0])]
+        print(f"Skin type prediction: {predicted_class}")
+        return predicted_class
     except Exception as e:
-        print(f"Skin type prediction failed: {e}")
+        print(f"Prediction error: {e}")
         raise HTTPException(status_code=500, detail="Error predicting skin type.")
 
-
-
+# API Endpoint to Upload Image & Get Prediction
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
     try:
-        print("Image file received in the POST request")
+        print("Received an image file.")
 
-        # Read and save the uploaded image
+        # Read uploaded image content
         content = await file.read()
         im = Image.open(BytesIO(content))
-        filename = f"image.png"
+
+        # Save image temporarily
+        filename = "uploaded_image.png"
         file_path = os.path.join('./static', filename)
         os.makedirs('./static', exist_ok=True)
         im.save(file_path)
         print(f"Image saved at: {file_path}")
 
-        # Ensure models are loaded
-        if not model1 or not model2:
-            raise HTTPException(status_code=500, detail="Models are not loaded properly.")
+        # Ensure model is loaded
+        if not model:
+            raise HTTPException(status_code=500, detail="Model not loaded properly.")
 
-        # Make predictions
-        skin_type = predict_skin(file_path).split('_')[0]
-        acne_type = predict_acne(file_path).split('_')[0]
- 
+        # Make a prediction
+        predicted_class = predict_skin_type(file_path)
 
-        print(f"Prediction response: Skin type: {skin_type}, Acne type: {acne_type}")
-
-     
-
-        return {"skin_type": skin_type,  "acne_type": acne_type}
+        return {"filename": file.filename, "predicted_class": predicted_class}
 
     except Exception as e:
-        print(f"Error processing the request: {e}")
-        raise HTTPException(status_code=500, detail="Error processing the image.")
+        print(f"Error processing request: {e}")
+        raise HTTPException(status_code=500, detail="Error processing image.")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
