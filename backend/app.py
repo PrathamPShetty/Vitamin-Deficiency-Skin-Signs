@@ -1,22 +1,48 @@
 import os
 import numpy as np
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File,Form
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing import image
 from PIL import Image
 from io import BytesIO
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import pandas as pd
+
+
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],  # Or specify your frontend URL here (e.g., "http://localhost:3000")
     allow_credentials=True,
-    allow_methods=["*"],  
-    allow_headers=["*"],  
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+DATA_FILE = "data.csv"
+
+# Create the CSV file if it doesn't exist
+if not os.path.exists(DATA_FILE):
+    df = pd.DataFrame(columns=["name", "email", "password", "phone", "address"])
+    df.to_csv(DATA_FILE, index=False)
+
+class User(BaseModel):
+    name: str
+    email: str
+    password: str
+    phone: str
+    address: str
+
+
+class LoginData(BaseModel):
+    email: str
+    password: str
+
 
 # class_names = [
 #     'Light Diseases and Disorders of Pigmentation',
@@ -92,6 +118,40 @@ async def upload_image(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Error processing request: {e}")
         raise HTTPException(status_code=500, detail="Error processing image.")
+
+@app.post("/register")
+async def register(user: User):
+    df = pd.read_csv(DATA_FILE)
+
+    # Check if email already exists
+    if user.email in df['email'].values:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Add new user to the CSV
+    new_data = pd.DataFrame([user.dict()])
+    new_data.to_csv(DATA_FILE, mode='a', header=False, index=False)
+    return {"message": "Registration successful"}
+
+
+@app.post("/login")
+async def login(login_data: LoginData):
+    email = login_data.email.strip().lower()
+    password = login_data.password.strip().lower()
+    print(f"Attempting login for: {email}, {password}")
+
+    df = pd.read_csv(DATA_FILE)
+    
+    # Ensure the columns are of string type
+    df['email'] = df['email'].astype(str)
+    df['password'] = df['password'].astype(str)
+
+    # Validate credentials
+    user = df[(df['email'].str.strip().str.lower() == email) & (df['password'].str.strip().str.lower() == password)]
+    
+    if not user.empty:
+        return {"message": "Login successful"}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
 if __name__ == "__main__":
     import uvicorn
